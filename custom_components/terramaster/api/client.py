@@ -45,6 +45,19 @@ _LOGGER = logging.getLogger(__name__)
 _PRIVILEGED_DATA_PREFIXES = ("smart=", "share=")
 
 
+def _smart_total_bytes(sata_lbas: int | None, nvme_units: int | None) -> int | None:
+    """Convert SMART lifetime counters to bytes.
+
+    SATA attributes 241/242 count 512-byte LBAs; NVMe "Data Units
+    Read/Written" count units of 512,000 bytes.
+    """
+    if sata_lbas is not None:
+        return sata_lbas * 512
+    if nvme_units is not None:
+        return nvme_units * 512_000
+    return None
+
+
 _COLLECT_COMMAND = r"""
 set -u
 first_file() {
@@ -743,6 +756,8 @@ class TerraMasterApiClient:
             nvme_temperature: float | None = None
             nvme_power_on_hours: int | None = None
             nvme_power_cycles: int | None = None
+            nvme_data_units_read: int | None = None
+            nvme_data_units_written: int | None = None
             for line in smart.get(name, []):
                 lower = line.lower()
                 if "test result:" in lower or "smart health status:" in lower:
@@ -761,6 +776,10 @@ class TerraMasterApiClient:
                     nvme_power_on_hours = int(float(number))
                 elif lower.startswith("power cycles:"):
                     nvme_power_cycles = int(float(number))
+                elif lower.startswith("data units read:"):
+                    nvme_data_units_read = int(float(number))
+                elif lower.startswith("data units written:"):
+                    nvme_data_units_written = int(float(number))
             result.append(
                 TerraMasterDisk(
                     name=name,
@@ -789,6 +808,12 @@ class TerraMasterApiClient:
                     pending_sectors=attributes.get(197),
                     offline_uncorrectable=attributes.get(198),
                     udma_crc_errors=attributes.get(199),
+                    total_read=_smart_total_bytes(
+                        attributes.get(242), nvme_data_units_read
+                    ),
+                    total_written=_smart_total_bytes(
+                        attributes.get(241), nvme_data_units_written
+                    ),
                 )
             )
         return tuple(result)
