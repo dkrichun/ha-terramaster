@@ -137,7 +137,7 @@ Confirmed during development:
 
 Reported by users:
 
-- TerraMaster F4-425 with TOS 7 (direct SMART collection without `sudo`)
+- TerraMaster F4-425 family (F4-425, F4-425 Plus, F4-425 Pro) with TOS 7 (direct SMART collection without `sudo`, NVMe monitoring for the M.2 slots)
 
 Other TOS 4, TOS 5, TOS 6 and TOS 7 devices may work, but should be treated as unverified until reported by users.
 
