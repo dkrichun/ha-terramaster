@@ -32,6 +32,8 @@ smart=sdb|  5 Reallocated_Sector_Ct   0x0033   200 200 140 Pre-fail Always - 2
 smart=sdb| 12 Power_Cycle_Count       0x0032   100 100 000 Old_age Always - 430
 smart=sdb|194 Temperature_Celsius     0x0022   104 100 000 Old_age Always - 39
 smart=sdb|199 UDMA_CRC_Error_Count    0x0032   200 200 000 Old_age Always - 0
+smart=sdb|241 Total_LBAs_Written      0x0032   100 100 000 Old_age Always - 12345678
+smart=sdb|242 Total_LBAs_Read         0x0032   100 100 000 Old_age Always - 23456789
 mdstat=md0 : active raid1 sdb4[0] sdc4[1]
 mdstat=      971336704 blocks super 1.2 [2/2] [UU]
 raid=md0|raid1|clean|0|idle|none
@@ -94,6 +96,10 @@ def test_parse_output() -> None:
     assert first.disks[1].reallocated_sectors == 2
     assert first.disks[1].power_cycle_count == 430
     assert first.disks[1].udma_crc_errors == 0
+    assert first.disks[0].total_read is None
+    assert first.disks[0].total_written is None
+    assert first.disks[1].total_read == 23456789 * 512
+    assert first.disks[1].total_written == 12345678 * 512
     assert first.raids[0].state == "clean"
     assert first.raids[0].members == ("sdb4", "sdc4")
     assert len(first.volumes) == 1
@@ -240,6 +246,8 @@ def test_parse_nvme_disk() -> None:
         "smart=nvme0n1|Temperature:                        38 Celsius\n"
         "smart=nvme0n1|Power On Hours:                     1,234\n"
         "smart=nvme0n1|Power Cycles:                       56\n"
+        "smart=nvme0n1|Data Units Read:                    10,000 [5.12 GB]\n"
+        "smart=nvme0n1|Data Units Written:                 20,000 [10.2 GB]\n"
     )
 
     (disk,) = data.disks
@@ -250,3 +258,5 @@ def test_parse_nvme_disk() -> None:
     assert disk.temperature == 38.0
     assert disk.power_on_hours == 1234
     assert disk.power_cycle_count == 56
+    assert disk.total_read == 10000 * 512_000
+    assert disk.total_written == 20000 * 512_000
