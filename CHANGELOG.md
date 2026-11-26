@@ -6,6 +6,18 @@ The format is based on Keep a Changelog.
 
 ---
 
+## [1.2.0] - 2026-11-27
+
+### Changed
+- Privileged collection (SMART, shared folders, TOS version) now tries a direct run first and falls back to `sudo`. On TOS 7 the shell user can access SMART data directly, while `sudo` restricts device access; older TOS versions continue to use `sudo`. The working mode is cached per client.
+
+### Added
+- NVMe disk discovery and monitoring: SMART health, temperature, power-on hours and power cycles via the controller's first namespace.
+- Additional TOS version file locations for newer TOS releases.
+
+### Tests
+- Direct-first privileged collection, sudo fallback, unavailable mode and NVMe SMART parsing.
+
 ## [1.1.6] - 2026-11-04
 
 ### Fixed

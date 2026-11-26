@@ -157,16 +157,16 @@ def test_parse_missing_values() -> None:
     assert data.disk_usage is None
 
 
-async def test_privileged_metrics_use_password_on_stdin() -> None:
-    """SMART and TOS version collection uses sudo without exposing the password."""
+async def test_privileged_metrics_prefer_direct_run() -> None:
+    """TOS 7: privileged data is collected directly, without sudo."""
     client = _client()
     connection = Mock()
     connection.run = AsyncMock(
         return_value=SimpleNamespace(
             exit_status=0,
             stdout=(
-                "model=F2-210\n"
-                "tos_version=4.2.44-294\n"
+                "model=F4-425\n"
+                "tos_version=7.0.12-345\n"
                 "smart=sdb|SMART overall-health self-assessment test result: PASSED\n"
             ),
             stderr="",
@@ -175,10 +175,78 @@ async def test_privileged_metrics_use_password_on_stdin() -> None:
 
     output = await client._async_collect_optional_data(connection)  # noqa: SLF001
 
+    assert "tos_version=7.0.12-345" in output
+    assert "smart=sdb" in output
+    command = connection.run.await_args.args[0]
+    assert not command.startswith("sudo")
+    assert connection.run.await_args.kwargs["input"] is None
+    assert client._privileged_mode == "direct"  # noqa: SLF001
+
+
+async def test_privileged_metrics_fall_back_to_sudo() -> None:
+    """TOS 4: without direct access the collection falls back to sudo."""
+    client = _client()
+    connection = Mock()
+    connection.run = AsyncMock(
+        side_effect=[
+            SimpleNamespace(exit_status=0, stdout="model=F2-210\n", stderr=""),
+            SimpleNamespace(
+                exit_status=0,
+                stdout=(
+                    "model=F2-210\n"
+                    "tos_version=4.2.44-294\n"
+                    "smart=sdb|SMART overall-health self-assessment "
+                    "test result: PASSED\n"
+                ),
+                stderr="",
+            ),
+        ]
+    )
+
+    output = await client._async_collect_optional_data(connection)  # noqa: SLF001
+
     assert "tos_version=4.2.44-294" in output
-    assert "model=F2-210" in output
     assert "smart=sdb" in output
     command = connection.run.await_args.args[0]
     assert command.startswith("sudo -S")
     assert "password" not in command
     assert connection.run.await_args.kwargs["input"] == "password\n"
+    assert client._privileged_mode == "sudo"  # noqa: SLF001
+
+
+async def test_privileged_metrics_unavailable() -> None:
+    """Both direct and sudo failures disable optional collection."""
+    client = _client()
+    connection = Mock()
+    connection.run = AsyncMock(
+        return_value=SimpleNamespace(exit_status=1, stdout="", stderr="denied")
+    )
+
+    output = await client._async_collect_optional_data(connection)  # noqa: SLF001
+
+    assert output == ""
+    assert client._privileged_mode == "unavailable"  # noqa: SLF001
+    # A subsequent poll does not retry.
+    output = await client._async_collect_optional_data(connection)  # noqa: SLF001
+    assert output == ""
+    assert connection.run.await_count == 2
+
+
+def test_parse_nvme_disk() -> None:
+    """NVMe SMART metrics are parsed from smartctl text output."""
+    data = _client()._parse_output(  # noqa: SLF001
+        "physical_disk=nvme0n1|KINGSTON SNV2S1000G|ABCD1234|live|1953525168\n"
+        "smart=nvme0n1|SMART overall-health self-assessment test result: PASSED\n"
+        "smart=nvme0n1|Temperature:                        38 Celsius\n"
+        "smart=nvme0n1|Power On Hours:                     1,234\n"
+        "smart=nvme0n1|Power Cycles:                       56\n"
+    )
+
+    (disk,) = data.disks
+    assert disk.name == "nvme0n1"
+    assert disk.model == "KINGSTON SNV2S1000G"
+    assert disk.serial == "ABCD1234"
+    assert disk.smart_status == "passed"
+    assert disk.temperature == 38.0
+    assert disk.power_on_hours == 1234
+    assert disk.power_cycle_count == 56

@@ -126,7 +126,7 @@ TerraMaster system RAID arrays are identified as TOS system or system swap where
 
 The NAS is the main Home Assistant device. Physical disks, RAID arrays, volumes and network interfaces are represented as child devices where appropriate.
 
-Some metrics require administrator access. When optional privileged collection is unavailable, the basic NAS metrics continue working.
+Some metrics require elevated access. The integration first tries a direct run — on newer TOS versions the shell user can read SMART data directly, while `sudo` may actually restrict device access — and falls back to `sudo` on older TOS versions. When optional privileged collection is unavailable, the basic NAS metrics continue working.
 
 ## Tested hardware
 
@@ -135,7 +135,11 @@ Confirmed during development:
 - TerraMaster F2-210
 - TOS 4.2.41
 
-Other TOS 4, TOS 5 and TOS 6 devices may work, but should be treated as unverified until reported by users.
+Reported by users:
+
+- TerraMaster F4-425 with TOS 7 (direct SMART collection without `sudo`)
+
+Other TOS 4, TOS 5, TOS 6 and TOS 7 devices may work, but should be treated as unverified until reported by users.
 
 ## Troubleshooting
 
@@ -149,9 +153,9 @@ sudo sqlite3 -separator '|' /etc/base/nasdb   'SELECT foldername,mntpath,device,
 
 ### SMART data is missing
 
-Verify that `smartctl` is installed on the NAS and that the configured account can execute it through `sudo`.
+Verify that `smartctl` is installed on the NAS and that the configured account can execute it — directly or through `sudo`, whichever works on your TOS version. The integration tries both.
 
-SMART support depends on the disk and bridge presented by the NAS. The integration prefers SAT for normal ATA disks and only uses the permissive SCSI fallback when SAT does not provide a usable SMART health result.
+SMART support depends on the disk and bridge presented by the NAS. The integration prefers SAT for normal ATA disks and only uses the permissive SCSI fallback when SAT does not provide a usable SMART health result. NVMe controllers are queried natively through their first namespace.
 
 ### Authentication or host-key error
 
@@ -184,6 +188,10 @@ node --test tests/js/*.test.cjs
 The Python test suite requires at least **80% coverage** in CI. The XML report is generated locally as `coverage.xml`. JavaScript tests require Node.js 22 and are checked separately; the Python coverage percentage does not include JavaScript.
 
 ## Release history
+
+### 1.2.0
+
+Privileged collection now tries a direct run first and falls back to `sudo` — on TOS 7 the shell user can read SMART data directly, while `sudo` restricts device access. NVMe disks are discovered and monitored (SMART health, temperature, power-on hours, power cycles). Additional TOS version file locations for newer TOS releases.
 
 ### 1.1.6
 
