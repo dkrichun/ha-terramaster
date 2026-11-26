@@ -11,6 +11,9 @@ The format is based on Keep a Changelog.
 ### Added
 - Per-disk total data read/written sensors computed from SMART: SATA attributes 241/242 (Total LBAs Written/Read) and NVMe "Data Units Read/Written", exposed in gigabytes. Power-on time is shown in days.
 
+### Fixed
+- TOS version detection on TOS 7: the version lives in `/etc/tos/config/login_title.conf` and `/etc/issue` (verified on TOS 7.0.1536). The parser now prefers a line mentioning "TOS" so the Ubuntu version in `/etc/issue` is not picked instead.
+
 ### Tests
 - SATA LBA totals and NVMe data units parsing.
 
