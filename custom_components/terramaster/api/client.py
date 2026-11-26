@@ -92,12 +92,18 @@ for file in /usr/www/version /etc/version /etc/TOS_VERSION /etc/tos_version \
     /etc/base/*release* /usr/local/etc/version /usr/www/*version* \
     /usr/www/include/*version* /usr/www/inc/*version* \
     /etc/tos/version /etc/tos/release /etc/tos/*version* /etc/tos/*release* \
+    /etc/tos/config/login_title.conf \
     /etc/TOS/version /etc/terramaster/release /etc/terramaster/TOS_VERSION \
-    /etc/conf.d/*version*; do
+    /etc/conf.d/*version* /etc/issue; do
     [ -r "$file" ] || continue
-    tos_version=$(awk \
-        'match($0, /[0-9]+\.[0-9]+\.[0-9]+([-._][0-9]+)?/) \
-        {print substr($0, RSTART, RLENGTH); exit}' "$file" 2>/dev/null)
+    # Prefer a line mentioning TOS so that, e.g., an Ubuntu version string
+    # in /etc/issue is not picked over the TOS version on TOS 7.
+    tos_version=$(awk '
+        /TOS/ && match($0, /[0-9]+\.[0-9]+\.[0-9]+([-._][0-9]+)?/) \
+        {print substr($0, RSTART, RLENGTH); printed=1; exit}
+        !found && match($0, /[0-9]+\.[0-9]+\.[0-9]+([-._][0-9]+)?/) \
+        {candidate=substr($0, RSTART, RLENGTH); found=1}
+        END {if (!printed && found) print candidate}' "$file" 2>/dev/null)
     [ -n "$tos_version" ] && break
 done
 printf 'tos_version=%s\n' "$tos_version"
@@ -230,12 +236,18 @@ for file in /usr/www/version /etc/version /etc/TOS_VERSION /etc/tos_version \
     /etc/base/*release* /usr/local/etc/version /usr/www/*version* \
     /usr/www/include/*version* /usr/www/inc/*version* \
     /etc/tos/version /etc/tos/release /etc/tos/*version* /etc/tos/*release* \
+    /etc/tos/config/login_title.conf \
     /etc/TOS/version /etc/terramaster/release /etc/terramaster/TOS_VERSION \
-    /etc/conf.d/*version*; do
+    /etc/conf.d/*version* /etc/issue; do
     [ -r "$file" ] || continue
-    tos_version=$(awk \
-        'match($0, /[0-9]+\.[0-9]+\.[0-9]+([-._][0-9]+)?/) \
-        {print substr($0, RSTART, RLENGTH); exit}' "$file" 2>/dev/null)
+    # Prefer a line mentioning TOS so that, e.g., an Ubuntu version string
+    # in /etc/issue is not picked over the TOS version on TOS 7.
+    tos_version=$(awk '
+        /TOS/ && match($0, /[0-9]+\.[0-9]+\.[0-9]+([-._][0-9]+)?/) \
+        {print substr($0, RSTART, RLENGTH); printed=1; exit}
+        !found && match($0, /[0-9]+\.[0-9]+\.[0-9]+([-._][0-9]+)?/) \
+        {candidate=substr($0, RSTART, RLENGTH); found=1}
+        END {if (!printed && found) print candidate}' "$file" 2>/dev/null)
     [ -n "$tos_version" ] && break
 done
 [ -n "$tos_version" ] && printf 'tos_version=%s\n' "$tos_version"
