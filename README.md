@@ -1,178 +1,177 @@
-# TerraMaster TOS for Home Assistant
+# TerraMaster TOS для Home Assistant
 
-Local monitoring of TerraMaster NAS devices from Home Assistant over SSH.
+> **Форк [minimicro34/ha-terramaster](https://github.com/minimicro34/ha-terramaster) с поддержкой TOS 7.**
+> Прямой сбор SMART без `sudo`, мониторинг NVMe-дисков, проверено на семействе F4-425 (F4-425, F4-425 Plus, F4-425 Pro).
 
-[![Release](https://img.shields.io/github/v/release/minimicro34/ha-terramaster)](https://github.com/minimicro34/ha-terramaster/releases)
-[![HACS](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://www.hacs.xyz/)
-[![Validate](https://github.com/minimicro34/ha-terramaster/actions/workflows/validate.yml/badge.svg)](https://github.com/minimicro34/ha-terramaster/actions/workflows/validate.yml)
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-%E2%98%95-FFDD00?logo=buymeacoffee&logoColor=000000)](https://buymeacoffee.com/minimicro34)
-[![License](https://img.shields.io/github/license/minimicro34/ha-terramaster)](LICENSE)
+Локальный мониторинг NAS TerraMaster из Home Assistant по SSH.
 
-## Features
+[![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
+[![License](https://img.shields.io/github/license/dkrichun/ha-terramaster)](LICENSE)
 
-- NAS model, TOS version, Linux distribution and kernel
-- Uptime, last restart, CPU, CPU cores, memory and temperature
-- Physical disks and SMART health information, including system-disk fallback where supported
-- RAID arrays, members, degradation, purpose and synchronization status/progress
-- Volumes, capacity and usage
-- Network interfaces, counters and real-time throughput
-- SSH, Telnet and SNMP service detection
-- Shared-folder discovery from the TOS database
-- SMB, NFS and AFP protocol detection
-- Secure HTML pages for all shares or one selected share
-- Authenticated shared-folder information page (no persistent access token)
-- Navigation between the shares index, individual share pages and NAS device
-- English and French translations
+## Поддержка TOS 7
 
-The integration polls locally and does not require a cloud account.
+TOS 7 построена на базе Ubuntu 22.04 с ядром 6.12 и использует новую модель разрешений: пользователь SSH имеет прямой доступ к устройствам, а `sudo` является ограниченной обёрткой и **блокирует** доступ к дискам (например, `sudo smartctl` возвращает `Permission denied`, тогда как обычный `smartctl` работает).
 
-## Requirements
+Оригинальная интеграция всегда выполняла сбор SMART и системных данных через `sudo` (если логин не `root`), поэтому на TOS 7 температура дисков, SMART-статусы, серийные номера, версия TOS и список общих папок оставались пустыми.
 
-- Home Assistant with HACS
-- SSH enabled on the TerraMaster NAS
-- A TOS account allowed to connect through SSH
-- Administrator access through `sudo` for optional SMART, service and shared-folder details
+**Что изменено в этом форке (версия 1.2.0):**
 
-The integration uses read-only commands. The configured password is used for SSH and, when available, read-only `sudo` collection.
+- **Прямой сбор в приоритете.** Привилегированные данные сначала запрашиваются напрямую; `sudo` используется только как запасной вариант для старых TOS 4/5/6. Рабочий режим определяется автоматически и кэшируется.
+- **NVMe-диски.** Обнаружение и мониторинг SSD в слотах M.2: SMART-здоровье, температура, часы работы, циклы включений (опрос контроллера через первый namespace).
+- **Версия TOS 7.** Добавлены дополнительные пути поиска файла версии системы.
 
-## Installation
+## Возможности
 
-### HACS (recommended)
+- Модель NAS, версия TOS, дистрибутив Linux и ядро
+- Аптайм, время последней перезагрузки, CPU, ядра CPU, память и температура
+- Физические диски (SATA и NVMe) и SMART-данные, включая fallback для системного диска
+- RAID-массивы: состав, деградация, назначение, статус и прогресс синхронизации
+- Тома: ёмкость и занятость
+- Сетевые интерфейсы: счётчики и текущая скорость
+- Определение служб SSH, Telnet и SNMP
+- Обнаружение общих папок из базы TOS
+- Определение протоколов SMB, NFS и AFP
+- Защищённые HTML-страницы для всех шар или одной выбранной
+- Английский и французский переводы интерфейса сущностей
 
-1. Open **HACS** and search for **TerraMaster TOS**.
-2. Install the integration.
-3. Restart Home Assistant.
+Интеграция опрашивает NAS локально и не требует облачной учётной записи.
 
-### HACS custom repository (alternative)
+## Требования
 
-If the integration is not yet visible in the default HACS catalog:
+- Home Assistant с HACS
+- Включённый SSH на NAS TerraMaster
+- Учётная запись TOS с доступом по SSH
 
-1. Open **HACS**.
-2. Open the menu and choose **Custom repositories**.
-3. Add `https://github.com/minimicro34/ha-terramaster`.
-4. Select **Integration** as the category.
-5. Install **TerraMaster TOS** and restart Home Assistant.
+Интеграция использует только команды чтения. Настроенный пароль применяется для SSH и, когда это необходимо (старые TOS), для read-only сбора через `sudo`.
 
-### Manual installation
+## Установка
 
-Copy:
+### HACS (пользовательский репозиторий)
+
+1. Откройте **HACS**.
+2. В меню выберите **Пользовательские репозитории**.
+3. Добавьте `https://github.com/dkrichun/ha-terramaster`.
+4. Выберите категорию **Integration**.
+5. Установите **TerraMaster TOS** и перезапустите Home Assistant.
+
+### Ручная установка
+
+Скопируйте:
 
 ```text
 custom_components/terramaster
 ```
 
-to:
+в:
 
 ```text
 /config/custom_components/terramaster
 ```
 
-and restart Home Assistant.
+и перезапустите Home Assistant.
 
-## Configuration
+## Настройка
 
-In Home Assistant:
+В Home Assistant:
 
-1. Go to **Settings → Devices & services**.
-2. Select **Add integration**.
-3. Search for **TerraMaster TOS**.
-4. Enter the NAS address, SSH port, username and password.
+1. Перейдите в **Настройки → Устройства и службы**.
+2. Нажмите **Добавить интеграцию**.
+3. Найдите **TerraMaster TOS**.
+4. Введите адрес NAS, SSH-порт, имя пользователя и пароль.
 
-The default SSH port is `9222`, but the configured TOS port can be used.
+SSH-порт по умолчанию — `9222`, можно использовать настроенный в TOS порт.
 
-The SSH host key is recorded during the first connection and checked on later connections.
+Ключ хоста SSH записывается при первом подключении и проверяется при последующих.
 
-## Shared folders
+## Общие папки
 
-The shared-folder HTML view requires Home Assistant authentication. Use the `terramaster.get_share_link` action in Home Assistant Developer Tools → Actions to generate a signed link valid for five minutes. The response contains a relative `url` (append it to your Home Assistant base URL) and `expires_in: 300`. If you have multiple NAS devices, supply `entry_id`; optionally supply `share` for one folder. The former permanent **Visit** link remains disabled to avoid exposing a reusable credential.
+HTML-просмотр общих папок требует аутентификации Home Assistant. Используйте действие `terramaster.get_share_link` в «Средства разработчика → Действия», чтобы получить подписанную ссылку на пять минут. Ответ содержит относительный `url` (добавьте его к базовому адресу Home Assistant) и `expires_in: 300`. Если NAS несколько, укажите `entry_id`; для одной папки — `share`.
 
-The main **Shared folders** sensor displays the number of detected shares. Its attributes contain:
+Основной сенсор **Shared folders** показывает количество обнаруженных шар. Его атрибуты содержат:
 
-- the share names;
-- all detected protocols;
+- имена шар;
+- все обнаруженные протоколы.
 
-Each individual shared-folder diagnostic entity keeps the detailed information:
+Каждая диагностическая сущность отдельной шары хранит подробности:
 
-- path, type, visibility and recycle-bin state;
-- volume, RAID and filesystem;
-- capacity, used space and available space in decimal GB;
-- usage percentage;
-- SMB, NFS and AFP URLs;
+- путь, тип, видимость и состояние корзины;
+- том, RAID и файловую систему;
+- ёмкость, занятое и доступное место в десятичных ГБ;
+- процент занятости;
+- URL для SMB, NFS и AFP.
 
-The shares index and individual share pages provide navigation back to the main NAS device. Individual share pages also provide a direct link back to the shares index.
+Пароли никогда не включаются в URL подключения. URL SMB и AFP могут содержать настроенное имя пользователя, чтобы операционная система запросила или переиспользовала пароль.
 
-Passwords are never included in connection URLs. SMB and AFP URLs can include the configured username so the operating system can request or reuse the password.
+## Хранилище и SMART
 
-## Storage and SMART
+Физические диски предоставляют данные о хранилище и SMART в объёме, поддерживаемом устройством.
 
-Physical disks expose the storage and SMART information supported by the device.
+Обычные ATA-диски опрашиваются через SAT. Устройства, не отдающие корректный SMART через SAT, используют fallback на permissive SCSI — например, системный USB-диск TerraMaster, если его поддерживает `smartctl`. NVMe-контроллеры опрашиваются нативно через первый namespace.
 
-Normal ATA disks use SAT SMART collection first. Devices that do not expose usable SMART health through SAT can fall back to permissive SCSI health collection. This is used, for example, for the TerraMaster USB system disk when supported by `smartctl`.
+Системные диски намеренно отдают только основную информацию и SMART-здоровье; неподдерживаемые ATA-счётчики и некорректные значения вроде `0 °C` не публикуются.
 
-System disks intentionally expose only relevant storage information and SMART health; unsupported ATA counters and invalid values such as a reported `0 °C` temperature are not exposed.
+## RAID-массивы
 
-## RAID arrays
+RAID-устройства показывают уровень, ёмкость, состояние, состав и число деградировавших дисков.
 
-RAID devices expose their level, capacity, state, members and degraded-disk count.
+Синхронизация представлена двумя отдельными сущностями:
 
-Synchronization is represented by two separate entities:
+- **Synchronization action** — состояния `idle`, `resync`, `recover` и т.п.
+- **Synchronization progress** — процент во время операции и `None` в простое.
 
-- **Synchronization action** reports states such as `idle`, `resync` or `recover`.
-- **Synchronization progress** reports the percentage while an operation is active and `None` / `Aucune` while idle.
+Системные RAID-массивы TerraMaster определяются как системные (TOS) или swap по данным файловых систем и монтирования. Метаданные системных массивов могут содержать 24 логических слота даже при меньшем числе дисков — они нормализуются, чтобы не создавать ложный счётчик деградации в интерфейсе Home Assistant.
 
-TerraMaster system RAID arrays are identified as TOS system or system swap where this can be determined from filesystem and mount information. TerraMaster's system-array metadata may contain 24 logical RAID slots even when only the installed physical members are expected; this metadata is normalized so it does not produce a misleading degraded-disk count in the primary Home Assistant UI.
+## Устройства и сущности
 
-## Devices and entities
+NAS — главное устройство Home Assistant. Физические диски, RAID-массивы, тома и сетевые интерфейсы представлены дочерними устройствами, где это уместно.
 
-The NAS is the main Home Assistant device. Physical disks, RAID arrays, volumes and network interfaces are represented as child devices where appropriate.
+Часть метрик требует повышенного доступа. Интеграция сначала пробует прямой запуск — на новых версиях TOS пользователь SSH читает SMART-данные напрямую, а `sudo` может наоборот ограничивать доступ к устройствам — и откатывается на `sudo` для старых версий TOS. Если привилегированный сбор недоступен, базовые метрики NAS продолжают работать.
 
-Some metrics require elevated access. The integration first tries a direct run — on newer TOS versions the shell user can read SMART data directly, while `sudo` may actually restrict device access — and falls back to `sudo` on older TOS versions. When optional privileged collection is unavailable, the basic NAS metrics continue working.
+## Проверенное оборудование
 
-## Tested hardware
-
-Confirmed during development:
+Подтверждено в разработке оригинальной интеграции:
 
 - TerraMaster F2-210
 - TOS 4.2.41
 
-Reported by users:
+Проверено пользователями этого форка:
 
-- TerraMaster F4-425 family (F4-425, F4-425 Plus, F4-425 Pro) with TOS 7 (direct SMART collection without `sudo`, NVMe monitoring for the M.2 slots)
+- Семейство TerraMaster F4-425 (F4-425, F4-425 Plus, F4-425 Pro) с TOS 7 — прямой сбор SMART без `sudo`, мониторинг NVMe-слотов M.2
 
-Other TOS 4, TOS 5, TOS 6 and TOS 7 devices may work, but should be treated as unverified until reported by users.
+Другие устройства с TOS 4, TOS 5, TOS 6 и TOS 7, скорее всего, заработают, но считаются непроверенными, пока пользователи не сообщат об этом.
 
-## Troubleshooting
+## Устранение неполадок
 
-### Shared folders are missing
+### Общие папки не отображаются
 
-Verify that the configured SSH user can run:
+Проверьте, что настроенный SSH-пользователь может выполнить:
 
 ```sh
 sudo sqlite3 -separator '|' /etc/base/nasdb   'SELECT foldername,mntpath,device,type,hidden,recycle FROM share;'
 ```
 
-### SMART data is missing
+### Нет SMART-данных
 
-Verify that `smartctl` is installed on the NAS and that the configured account can execute it — directly or through `sudo`, whichever works on your TOS version. The integration tries both.
+Проверьте, что `smartctl` установлен на NAS и что настроенная учётная запись может его выполнять — напрямую или через `sudo`, в зависимости от того, что работает на вашей версии TOS. Интеграция пробует оба способа.
 
-SMART support depends on the disk and bridge presented by the NAS. The integration prefers SAT for normal ATA disks and only uses the permissive SCSI fallback when SAT does not provide a usable SMART health result. NVMe controllers are queried natively through their first namespace.
+Поддержка SMART зависит от диска и моста, представленного NAS. Интеграция предпочитает SAT для обычных ATA-дисков и использует permissive SCSI только как fallback, когда SAT не даёт корректного результата.
 
-### Authentication or host-key error
+### Ошибка аутентификации или ключа хоста
 
-Remove and re-add the integration only after confirming that the NAS address and SSH host key change are expected.
+Удаляйте и пересоздавайте интеграцию, только убедившись, что адрес NAS и смена ключа хоста SSH ожидаемы.
 
-## Privacy and security
+## Приватность и безопасность
 
-- Communication stays on the local network.
-- No cloud service is used.
-- The SSH server host key is pinned.
-- Shared-folder HTML views require Home Assistant authentication and use only short-lived signed links returned by an explicit action.
-- Legacy shared-folder tokens are removed from existing configuration entries at startup.
-- Passwords are not exposed in entity attributes or URLs.
+- Обмен данными остаётся в локальной сети.
+- Облачные сервисы не используются.
+- Ключ хоста SSH закрепляется (pinning).
+- HTML-страницы шар требуют аутентификации Home Assistant и используют короткоживущие подписанные ссылки, возвращаемые явным действием.
+- Устаревшие токены шар удаляются из существующих записей конфигурации при запуске.
+- Пароли не публикуются в атрибутах сущностей и URL.
 
-## Development checks
+## Проверки для разработки
 
-Use a local virtual environment (Python 3.14):
+Используйте локальное виртуальное окружение (Python 3.14):
 
 ```sh
 python3 -m venv .venv
@@ -185,114 +184,92 @@ node --check custom_components/terramaster/www/terramaster-card.js
 node --test tests/js/*.test.cjs
 ```
 
-The Python test suite requires at least **80% coverage** in CI. The XML report is generated locally as `coverage.xml`. JavaScript tests require Node.js 22 and are checked separately; the Python coverage percentage does not include JavaScript.
+Python-тесты требуют покрытия не менее **80%** в CI. XML-отчёт генерируется локально как `coverage.xml`. JavaScript-тесты требуют Node.js 22 и проверяются отдельно.
 
-## Release history
+## История релизов
 
 ### 1.2.0
 
-Privileged collection now tries a direct run first and falls back to `sudo` — on TOS 7 the shell user can read SMART data directly, while `sudo` restricts device access. NVMe disks are discovered and monitored (SMART health, temperature, power-on hours, power cycles). Additional TOS version file locations for newer TOS releases.
+Поддержка TOS 7: привилегированный сбор сначала выполняется напрямую и лишь затем откатывается на `sudo` — в TOS 7 пользователь SSH читает SMART-данные напрямую, а `sudo` ограничивает доступ к устройствам. Добавлены обнаружение и мониторинг NVMe-дисков (SMART-здоровье, температура, часы работы, циклы включений). Дополнительные пути поиска файла версии для новых выпусков TOS.
 
 ### 1.1.6
 
-Fix the remaining deprecated Home Assistant device registry lookup in the shared-folder navigation. Update HACS installation instructions for the default catalog.
+Исправлен последний устаревший вызов реестра устройств Home Assistant в навигации по шарам. Обновлены инструкции по установке через каталог HACS по умолчанию.
 
 ### 1.1.5
 
-Improve localized entity discovery, native Sections grid sizing, and compact numeric readings.
+Улучшены локализованное обнаружение сущностей, нативный размер сетки Sections и компактные числовые значения.
 
 ### 1.1.4
 
-Home Assistant device registry compatibility update.
+Обновление совместимости с реестром устройств Home Assistant.
 
 ### 1.1.3
 
-Experimental bundled Lovelace NAS dashboard with collapsible detail sections, a secure signed-share-link action, JavaScript tests, and Python coverage enforcement. Released November 2026.
+Экспериментальный встроенный Lovelace-дашборд NAS со сворачиваемыми секциями, безопасное действие подписанной ссылки на шары, JavaScript-тесты и контроль покрытия Python. Выпущено в ноябре 2026.
 
 ### 1.1.2
 
-Replaced persistent share-page tokens with authenticated, short-lived signed links and removed legacy token exposure.
+Постоянные токены страниц шар заменены аутентифицированными короткоживущими подписанными ссылками; устранено раскрытие устаревших токенов.
 
 ### 1.1.0
 
-Improved SMART handling for TerraMaster system disks, expanded RAID information and system-array handling, and improved shared-folder navigation with direct access from the main NAS device.
+Улучшена обработка SMART для системных дисков TerraMaster, расширена информация о RAID и системных массивах, улучшена навигация по шарам с прямым доступом от главного устройства NAS.
 
 ### 1.0.0
 
-First stable release with system, SMART, RAID, volume, network, services and shared-folder monitoring.
+Первый стабильный релиз: мониторинг системы, SMART, RAID, томов, сети, служб и общих папок.
 
-See [CHANGELOG.md](CHANGELOG.md) for the complete release history, with stable release entries.
+Полную историю релизов см. в [CHANGELOG.md](CHANGELOG.md).
 
-## Contributing
+## Участие в разработке
 
-Contributions are welcome.
+Сообщения об ошибках, предложения и pull-запросы приветствуются.
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting changes.
+Перед значительными изменениями, пожалуйста, сначала откройте issue с описанием планируемого pull-запроса.
 
-For significant changes, please open an issue before submitting a pull request.
+## Благодарность
 
-## Support
+Оригинальная интеграция — [minimicro34](https://github.com/minimicro34/ha-terramaster). Если она вам полезна, поддержите автора оригинала: [buymeacoffee.com/minimicro34](https://buymeacoffee.com/minimicro34).
 
-If you find TerraMaster TOS for Home Assistant useful and would like to support
-its development, you can buy me a coffee.
+При сообщении об ошибке укажите, пожалуйста:
 
-<p align="center">
-  <a href="https://buymeacoffee.com/minimicro34">
-    <img
-      src="https://github.com/appcraftstudio/buymeacoffee/raw/master/Images/snapshot-bmc-button.png"
-      alt="Buy Me a Coffee"
-      width="300"
-    />
-  </a>
-</p>
+- модель NAS TerraMaster;
+- версию TOS;
+- версию интеграции;
+- версию Home Assistant;
+- понятное описание проблемы;
+- соответствующие журналы Home Assistant;
+- диагностику Home Assistant.
 
-Your support helps me dedicate more time to improving the integration, adding new
-features, testing additional TerraMaster TOS configurations and fixing issues.
+При проблемах с SSH или сбором данных также укажите:
 
-Bug reports, feature suggestions, contributions and GitHub stars are also
-greatly appreciated.
+- используемый метод аутентификации (пароль или ключ SSH);
+- работает ли SSH-подключение вне Home Assistant;
+- какой сенсор или категория данных затронуты;
+- соответствующие ошибки команд с удалёнными конфиденциальными данными.
 
-Please use GitHub Issues for bug reports and feature requests.
+Никогда не включайте пароли, закрытые ключи SSH, учётные данные и другую конфиденциальную информацию о NAS.
 
-When reporting an issue, please include whenever possible:
-
-- TerraMaster NAS model;
-- TOS version;
-- TerraMaster integration version;
-- Home Assistant version;
-- a clear description of the problem;
-- relevant Home Assistant logs;
-- Home Assistant diagnostics.
-
-For SSH or data-collection problems, please also include:
-
-- the authentication method used (password or SSH key);
-- whether the SSH connection works outside Home Assistant;
-- which sensor or data category is affected;
-- relevant command errors, with sensitive information redacted.
-
-Never include passwords, SSH private keys, authentication credentials or other
-sensitive NAS information.
-
-## License
+## Лицензия
 
 Copyright (c) 2026 minimicro34
 
-This project is licensed under the [GNU General Public License v3.0 or later](LICENSE).
+Проект распространяется по лицензии [GNU General Public License v3.0 или новее](LICENSE).
 
-## TerraMaster Lovelace dashboard (experimental)
+## Lovelace-дашборд TerraMaster (экспериментальный)
 
-The integration bundles a responsive `custom:terramaster-card` dashboard, inspired by NAS management consoles. It displays available CPU, RAM, temperature, storage, SMART, RAID, volume, network, and service sensors, plus an **Open shares** button. The card does not store authentication tokens; it calls `terramaster.get_share_link` on click and opens a five-minute signed link.
+Интеграция содержит адаптивный дашборд `custom:terramaster-card` в стиле консолей управления NAS. Он показывает доступные сенсоры CPU, RAM, температуры, хранилища, SMART, RAID, томов, сети и служб, а также кнопку **Open shares**. Карточка не хранит токены аутентификации; она вызывает `terramaster.get_share_link` по клику и открывает подписанную ссылку на пять минут.
 
-In a manual dashboard card (Sections or Panel view), use:
+В ручной карточке дашборда (режим Sections или Panel) используйте:
 
 ```yaml
 type: custom:terramaster-card
-title: My TerraMaster NAS
-# Optional legacy fallback when the entity registry is unavailable:
+title: Мой TerraMaster NAS
+# Необязательный запасной вариант, если реестр сущностей недоступен:
 # entity_prefix: sensor.my_nas
-# Recommended if more than one TerraMaster integration entry exists:
+# Рекомендуется, если настроено больше одной записи TerraMaster:
 # entry_id: your_config_entry_id
 ```
 
-In Lovelace storage mode the bundled JavaScript resource is registered automatically. For YAML-mode Lovelace, add `/terramaster/terramaster-card.js?v=<installed-version>` as a JavaScript module resource manually (replace `<installed-version>` with the version from `manifest.json`). In Sections views, the card requests the full width of its section through Home Assistant's native grid options. The actual section width is controlled by the dashboard layout; Panel views also work. No custom CSS or special YAML grid settings are required. The browser must allow opening a new tab for the signed shares link. Detail sections (disks/SMART, RAID, volumes, network, and services) are collapsed by default and retain their expanded state during refreshes. The dashboard is experimental and will be refined based on device testing.
+В режиме Lovelace с хранением в UI встроенный JavaScript-ресурс регистрируется автоматически. Для YAML-режима Lovelace добавьте `/terramaster/terramaster-card.js?v=<установленная-версия>` как JavaScript-модуль вручную (версию возьмите из `manifest.json`). В режиме Sections карточка запрашивает полную ширину секции через нативные настройки сетки Home Assistant. Реальная ширина секции управляется макетом дашборда; режим Panel тоже поддерживается. Специальный CSS или YAML-настройки сетки не требуются. Браузер должен разрешать открытие новой вкладки для подписанной ссылки на шары. Секции деталей (диски/SMART, RAID, тома, сеть и службы) по умолчанию свёрнуты и сохраняют состояние при обновлении. Дашборд экспериментальный и будет дорабатываться по результатам тестирования на устройствах.
