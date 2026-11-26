@@ -13,6 +13,7 @@ Local monitoring of TerraMaster NAS devices from Home Assistant over SSH.
 - NAS model, TOS version, Linux distribution and kernel
 - Uptime, last restart, CPU, CPU cores, memory and temperature
 - Physical disks and SMART health information, including system-disk fallback where supported
+- Lifetime read/written totals per disk computed from SMART, with power-on time in days
 - RAID arrays, members, degradation, purpose and synchronization status/progress
 - Volumes, capacity and usage
 - Network interfaces, counters and real-time throughput
@@ -108,6 +109,8 @@ Passwords are never included in connection URLs. SMB and AFP URLs can include th
 Physical disks expose the storage and SMART information supported by the device.
 
 Normal ATA disks use SAT SMART collection first. Devices that do not expose usable SMART health through SAT can fall back to permissive SCSI health collection. This is used, for example, for the TerraMaster USB system disk when supported by `smartctl`.
+
+Lifetime totals of data read and written are computed from SMART counters — SATA attributes 241/242 (Total LBAs Written/Read) and NVMe Data Units Read/Written — and exposed in gigabytes. Power-on time is reported in days.
 
 System disks intentionally expose only relevant storage information and SMART health; unsupported ATA counters and invalid values such as a reported `0 °C` temperature are not exposed.
 
