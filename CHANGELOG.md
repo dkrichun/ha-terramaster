@@ -13,10 +13,12 @@ The format is based on Keep a Changelog.
 
 ### Added
 - NVMe disk discovery and monitoring: SMART health, temperature, power-on hours and power cycles via the controller's first namespace.
+- Per-disk total data read/written sensors computed from SMART: SATA attributes 241/242 (Total LBAs Written/Read) and NVMe "Data Units Read/Written", exposed in gigabytes. Power-on time is shown in days.
 - Additional TOS version file locations for newer TOS releases.
 
 ### Tests
 - Direct-first privileged collection, sudo fallback, unavailable mode and NVMe SMART parsing.
+- SATA LBA totals and NVMe data units parsing.
 
 ## [1.1.6] - 2026-11-04
 
