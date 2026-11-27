@@ -5,6 +5,7 @@
 
 Локальный мониторинг NAS TerraMaster из Home Assistant по SSH.
 
+[![GitHub Release](https://img.shields.io/github/v/release/dkrichun/ha-terramaster?display_name=tag&sort=semver)](https://github.com/dkrichun/ha-terramaster/releases)
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
 [![License](https://img.shields.io/github/license/dkrichun/ha-terramaster)](LICENSE)
 
@@ -19,7 +20,7 @@ TOS 7 построена на базе Ubuntu 22.04 с ядром 6.12 и исп
 - **Прямой сбор в приоритете.** Привилегированные данные сначала запрашиваются напрямую; `sudo` используется только как запасной вариант для старых TOS 4/5/6. Рабочий режим определяется автоматически и кэшируется.
 - **NVMe-диски.** Обнаружение и мониторинг SSD в слотах M.2: SMART-здоровье, температура, часы работы, циклы включений (опрос контроллера через первый namespace). Слоты M.2 есть у F4-425 Plus и F4-425 Pro (по три); у базового F4-425 их нет.
 - **Записано и прочитано.** Суммарные объёмы записанных и прочитанных данных по каждому диску в гигабайтах из SMART (SATA — атрибуты 241/242 Total LBAs Written/Read, NVMe — Data Units Written/Read). Время наработки диска показывается в днях.
-- **Версия TOS 7.** Добавлены дополнительные пути поиска файла версии системы.
+- **Версия TOS 7.** Добавлены дополнительные пути поиска файла версии системы: на TOS 7 версия хранится в `/etc/tos/config/login_title.conf` и `/etc/issue`. Парсер предпочитает строку с упоминанием «TOS», чтобы не перепутать версию TOS с версией Ubuntu в `/etc/issue`.
 
 ## Возможности
 
@@ -193,7 +194,7 @@ Python-тесты требуют покрытия не менее **80%** в CI.
 
 ### 1.2.1
 
-Добавлены сенсоры суммарно записанных и прочитанных данных по каждому диску в гигабайтах (SMART: SATA-атрибуты 241/242 Total LBAs Written/Read, NVMe Data Units Read/Written). Время наработки диска отображается в днях.
+Добавлены сенсоры суммарно записанных и прочитанных данных по каждому диску в гигабайтах (SMART: SATA-атрибуты 241/242 Total LBAs Written/Read, NVMe Data Units Read/Written). Время наработки диска отображается в днях. Исправлено определение версии TOS 7: версия читается из `/etc/tos/config/login_title.conf` и `/etc/issue`, с приоритетом строки, упоминающей «TOS».
 
 ### 1.2.0
 
