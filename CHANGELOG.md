@@ -6,7 +6,7 @@ The format is based on Keep a Changelog.
 
 ---
 
-## [1.2.0] - 2026-11-27
+## [Unreleased]
 
 ### Changed
 - Privileged collection (SMART, shared folders, TOS version) now tries a direct run first and falls back to `sudo`. On TOS 7 the shell user can access SMART data directly, while `sudo` restricts device access; older TOS versions continue to use `sudo`. SMART and shared-folder collection are tracked independently (a mode providing only one of them no longer suppresses the fallback for the other), partial outputs are merged, version-only output is preserved, and transient SSH failures are retried on the next poll instead of disabling collection.
