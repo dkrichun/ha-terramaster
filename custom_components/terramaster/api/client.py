@@ -6,7 +6,7 @@ import asyncio
 import logging
 import shlex
 import time
-from typing import Any
+from typing import Any, NamedTuple
 
 import asyncssh
 
@@ -40,16 +40,39 @@ from .parsers import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Line prefixes proving the optional collection actually obtained
-# privileged data (SMART needs device access, shares need nasdb access).
-_PRIVILEGED_DATA_PREFIXES = ("smart=", "share=")
+# Kinds of privileged data from the optional collection, tracked
+# independently: SMART needs device access, shares need nasdb access,
+# and a single mode (direct or sudo) may provide only one of them.
+_PRIVILEGED_KINDS = ("smart", "share")
+
+# SATA attributes 241/242 are vendor-specific: only counters explicitly
+# named "Total_LBAs_Written/Read" are known to count 512-byte LBAs.
+# Other firmware reuses these attribute IDs for different units.
+_SATA_LBA_COUNTER_NAMES = {241: "total_lbas_written", 242: "total_lbas_read"}
+
+
+class _OptionalRun(NamedTuple):
+    """Result of a single optional collection attempt."""
+
+    output: str | None
+    transient: bool
+
+
+def _sata_lba_count(
+    attributes: dict[int, int], names: dict[int, str], attribute_id: int
+) -> int | None:
+    """Return a raw SATA LBA counter only when its semantics are known."""
+    if names.get(attribute_id, "").casefold() != _SATA_LBA_COUNTER_NAMES[attribute_id]:
+        return None
+    return attributes.get(attribute_id)
 
 
 def _smart_total_bytes(sata_lbas: int | None, nvme_units: int | None) -> int | None:
     """Convert SMART lifetime counters to bytes.
 
-    SATA attributes 241/242 count 512-byte LBAs; NVMe "Data Units
-    Read/Written" count units of 512,000 bytes.
+    SATA attributes 241/242 count 512-byte LBAs (accepted only when the
+    counter name confirms LBA semantics, see `_sata_lba_count`); NVMe
+    "Data Units Read/Written" count units of 512,000 bytes.
     """
     if sata_lbas is not None:
         return sata_lbas * 512
@@ -391,7 +414,9 @@ class TerraMasterApiClient:
         self._previous_cpu: tuple[int, int] | None = None
         self._previous_cpu_cores: dict[str, tuple[int, int]] = {}
         self._previous_network: dict[str, tuple[float, int, int]] = {}
-        self._privileged_mode: str | None = None
+        self._privileged_modes: dict[str, str | None] = {
+            kind: None for kind in _PRIVILEGED_KINDS
+        }
         self._clock = time.monotonic
         self._lock = asyncio.Lock()
 
@@ -437,39 +462,69 @@ class TerraMasterApiClient:
 
         A direct run is tried first: on newer TOS versions the shell user
         can read SMART data directly, while ``sudo`` actually restricts
-        device access. Older TOS versions fall back to ``sudo``. The
-        working mode is cached for the lifetime of the client.
+        device access. Older TOS versions fall back to ``sudo``. SMART
+        and shared-folder data may be reachable through different modes,
+        so each kind is tracked independently and partial outputs are
+        merged. The working mode per kind is cached for the lifetime of
+        the client; transient SSH failures are not latched and are
+        retried on the next poll.
         """
-        if self._privileged_mode == "unavailable":
+        pending = {
+            kind
+            for kind, mode in self._privileged_modes.items()
+            if mode != "unavailable"
+        }
+        if not pending:
             return ""
 
-        modes = ("direct", "sudo")
-        if self._privileged_mode == "sudo":
-            modes = ("sudo", "direct")
+        if self._username == "root":
+            modes: tuple[str, ...] = ("direct",)
+        else:
+            preferred = [
+                mode
+                for kind in _PRIVILEGED_KINDS
+                if kind in pending
+                and (mode := self._privileged_modes[kind]) is not None
+            ]
+            modes = tuple(dict.fromkeys((*preferred, "direct", "sudo")))
 
+        outputs: list[str] = []
+        transient_failure = False
         for mode in modes:
-            output = await self._async_run_optional(
+            if not pending:
+                break
+            run = await self._async_run_optional(
                 connection, use_sudo=mode == "sudo"
             )
-            if output is None or not self._has_privileged_data(output):
+            if run.output is None:
+                transient_failure = transient_failure or run.transient
                 continue
-            if self._privileged_mode not in (None, mode):
-                _LOGGER.debug(
-                    "TerraMaster privileged metrics mode switched to %s", mode
-                )
-            self._privileged_mode = mode
-            return output
+            # Even a version-only output is kept: the TOS version may be
+            # readable exclusively through this command on some devices.
+            outputs.append(run.output)
+            for kind in tuple(pending):
+                if not self._has_marker(run.output, kind):
+                    continue
+                if self._privileged_modes[kind] not in (None, mode):
+                    _LOGGER.debug(
+                        "TerraMaster %s metrics mode switched to %s", kind, mode
+                    )
+                self._privileged_modes[kind] = mode
+                pending.discard(kind)
 
-        self._privileged_mode = "unavailable"
-        _LOGGER.debug(
-            "Optional TerraMaster metrics are unavailable "
-            "both directly and through sudo"
-        )
-        return ""
+        if pending and not transient_failure:
+            for kind in pending:
+                self._privileged_modes[kind] = "unavailable"
+            _LOGGER.debug(
+                "Optional TerraMaster metrics are unavailable "
+                "both directly and through sudo: %s",
+                ", ".join(sorted(pending)),
+            )
+        return "\n".join(outputs)
 
     async def _async_run_optional(
         self, connection: asyncssh.SSHClientConnection, *, use_sudo: bool
-    ) -> str | None:
+    ) -> _OptionalRun:
         """Run the optional collection command, optionally through sudo."""
         if use_sudo:
             command = f"sudo -S -p '' sh -c {shlex.quote(_OPTIONAL_COMMAND)}"
@@ -490,7 +545,7 @@ class TerraMasterApiClient:
                 "sudo" if use_sudo else "direct",
                 err,
             )
-            return None
+            return _OptionalRun(output=None, transient=True)
         if result.exit_status != 0:
             _LOGGER.debug(
                 "Optional TerraMaster metrics (%s) exited with %s: %s",
@@ -498,16 +553,14 @@ class TerraMasterApiClient:
                 result.exit_status,
                 _to_text(result.stderr).strip(),
             )
-            return None
-        return _to_text(result.stdout)
+            return _OptionalRun(output=None, transient=False)
+        return _OptionalRun(output=_to_text(result.stdout), transient=False)
 
     @staticmethod
-    def _has_privileged_data(output: str) -> bool:
-        """Return whether the optional command yielded privileged data."""
-        return any(
-            line.startswith(_PRIVILEGED_DATA_PREFIXES)
-            for line in output.splitlines()
-        )
+    def _has_marker(output: str, kind: str) -> bool:
+        """Return whether the output contains data of the given kind."""
+        prefix = f"{kind}="
+        return any(line.startswith(prefix) for line in output.splitlines())
 
     async def _async_connect(
         self, *, trust_on_first_use: bool = False
@@ -764,6 +817,7 @@ class TerraMasterApiClient:
             size_bytes = size * 512
             is_system = size_bytes < 10_000_000_000
             attributes: dict[int, int] = {}
+            attribute_names: dict[int, str] = {}
             health: str | None = None
             nvme_temperature: float | None = None
             nvme_power_on_hours: int | None = None
@@ -776,7 +830,9 @@ class TerraMasterApiClient:
                     health = line.rsplit(":", 1)[-1].strip().lower()
                 match = SMART_ATTRIBUTE.match(line)
                 if match:
-                    attributes[int(match.group(1))] = int(match.group(2))
+                    attribute_id = int(match.group(1))
+                    attribute_names[attribute_id] = match.group(2)
+                    attributes[attribute_id] = int(match.group(3))
                     continue
                 nvme_match = NVME_METRIC.search(line)
                 if nvme_match is None:
@@ -806,12 +862,8 @@ class TerraMasterApiClient:
                         if 194 in attributes
                         else nvme_temperature
                     ),
-                    power_on_hours=(
-                        attributes[9] if 9 in attributes else nvme_power_on_hours
-                    ),
-                    power_cycle_count=(
-                        attributes[12] if 12 in attributes else nvme_power_cycles
-                    ),
+                    power_on_hours=attributes.get(9, nvme_power_on_hours),
+                    power_cycle_count=attributes.get(12, nvme_power_cycles),
                     start_stop_count=attributes.get(4),
                     load_cycle_count=attributes.get(193),
                     spin_retry_count=attributes.get(10),
@@ -821,10 +873,12 @@ class TerraMasterApiClient:
                     offline_uncorrectable=attributes.get(198),
                     udma_crc_errors=attributes.get(199),
                     total_read=_smart_total_bytes(
-                        attributes.get(242), nvme_data_units_read
+                        _sata_lba_count(attributes, attribute_names, 242),
+                        nvme_data_units_read,
                     ),
                     total_written=_smart_total_bytes(
-                        attributes.get(241), nvme_data_units_written
+                        _sata_lba_count(attributes, attribute_names, 241),
+                        nvme_data_units_written,
                     ),
                 )
             )
