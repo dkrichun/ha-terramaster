@@ -12,12 +12,12 @@ The format is based on Keep a Changelog.
 - Privileged collection (SMART, shared folders, TOS version) now tries a direct run first and falls back to `sudo`. On TOS 7 the shell user can access SMART data directly, while `sudo` restricts device access; older TOS versions continue to use `sudo`. SMART and shared-folder collection are tracked independently (a mode providing only one of them no longer suppresses the fallback for the other), partial outputs are merged, version-only output is preserved, and transient SSH failures are retried on the next poll instead of disabling collection.
 
 ### Added
-- NVMe disk discovery and monitoring: SMART health, temperature, power-on hours and power cycles via the controller's first namespace.
+- NVMe disk discovery and monitoring as a complement to the primary SATA monitoring: SMART health, temperature, power-on hours and power cycles via the controller's first namespace (M.2 slots on models that have them, e.g. F4-425 Plus/Pro).
 - Per-disk total data read/written sensors computed from SMART: SATA attributes 241/242 only when named "Total_LBAs_Written/Read" (512-byte LBA semantics are vendor-specific) and NVMe "Data Units Read/Written", exposed in gigabytes. Power-on time is shown in days.
 - Additional TOS version file locations for newer TOS releases, including `/etc/tos/config/login_title.conf` and `/etc/issue` on TOS 7; the parser prefers a line mentioning "TOS" so the Ubuntu version in `/etc/issue` is not picked instead (verified on TOS 7.0.1536).
 
 ### Tests
-- Direct-first privileged collection, sudo fallback, unavailable mode and NVMe SMART parsing.
+- Direct-first privileged collection, sudo fallback, unavailable mode and SATA/NVMe SMART parsing.
 - Partial privileged collection (SMART direct + shares via sudo), version-only output, root direct-only mode and retry after transient SSH failures.
 - SATA LBA totals accepted only for known counter names, and NVMe data units parsing.
 
